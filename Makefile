@@ -2,16 +2,15 @@
 
 export LIBPYTHON_LOC=$(shell cocotb-config --libpython)
 export PYGPI_PYTHON_BIN=$(shell cocotb-config --python-bin)
+TOPLEVEL=gpu
 
-# Rule to clean the build directory
 clean:
 	rm -rf build/*
-	rm -f *.vcd
-	rm -f *.vvp
 
 test_%:
 	make compile
-	iverilog -o build/sim.vvp -s gpu -g2012 build/gpu.v
+	make build/iverilog_dump_$*.sv
+	iverilog -o build/sim.vvp -s $(TOPLEVEL) -s iverilog_dump_$* -g2012 build/$(TOPLEVEL).v build/iverilog_dump_$*.sv
 	COCOTB_TEST_MODULES=test.test_$* vvp -M $$(cocotb-config --lib-dir) -m libcocotbvpi_icarus build/sim.vvp
 
 compile:
@@ -26,7 +25,13 @@ compile:
 compile_%:
 	sv2v -w build/$*.v src/$*.sv
 
-# TODO: Get gtkwave visualizaiton
+build/iverilog_dump_%.sv:
+	echo 'module iverilog_dump_$*();'        > $@
+	echo 'initial begin'                    >> $@
+	echo '    $$dumpfile("build/$*.vcd");'  >> $@
+	echo '    $$dumpvars(0, $(TOPLEVEL));'  >> $@
+	echo 'end'                             >> $@
+	echo 'endmodule'                       >> $@
 
-show_%: %.vcd %.gtkw
-	gtkwave $^
+show_%: build/%.vcd
+	gtkwave $
