@@ -4,6 +4,7 @@ from .helpers.setup import setup
 from .helpers.memory import Memory
 from .helpers.format import format_cycle
 from .helpers.logger import logger
+from .helpers.stats import Stats
 
 @cocotb.test()
 async def test_matadd(dut):
@@ -62,19 +63,23 @@ async def test_matadd(dut):
 
     data_memory.display(12)
 
-    cycles = 0
+    #cycles = 0
+    stats = Stats(dut)
+
     while dut.done.value != 1:
         data_memory.run()
         program_memory.run()
 
         await cocotb.triggers.ReadOnly()
-        format_cycle(dut, cycles, thread_id=1)
+        stats.tick()
+        format_cycle(dut, stats.cycles, thread_id=1)
         
         await RisingEdge(dut.clk)
-        cycles += 1
+        #cycles += 1
 
-    logger.info(f"Completed in {cycles} cycles")
     data_memory.display(12)
+    stats.flush()
+    logger.info(f"Completed in {stats.cycles} cycles")
 
 
     # Assuming the matrices are 2x2 and the result is stored starting at address 9

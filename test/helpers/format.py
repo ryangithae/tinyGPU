@@ -139,3 +139,28 @@ def format_cycle(dut, cycle_id: int, thread_id: Optional[int] = None):
                         logger.debug("Constant:", constant)
 
         logger.debug("Core Done:", str(core.core_instance.done.value))
+    
+# def format_stats(dut, cycles: int, num_inst: int):
+#     ipc = num_inst / cycles if cycles > 0 else 0.0
+
+#     # Memory stall cycles: cycles where any active core was in WAIT state
+#     wait_cycles = sum(
+#         1 for core in dut.cores
+#         if format_core_state(str(core.core_instance.core_state.value)) == "WAIT"
+#     )
+
+#     # Warp interleaving efficiency: fraction of cycles where at least one
+#     # thread was in EXECUTE or UPDATE rather than stalling on memory
+#     # UPDATE is added since the core is doing useful work of WB and advancing the PC in that state
+#     active_cores = sum(
+#         1 for core in dut.cores
+#         if format_core_state(str(core.core_instance.core_state.value)) in ("EXECUTE", "UPDATE") 
+#     )
+
+#     logger.stats(
+#         num_cycles=cycles,
+#         num_inst=num_inst,
+#         ipc=f"{ipc:.4f}",
+#         mem_wait_cycles=wait_cycles,
+#         active_cores_final=active_cores,
+#     )
