@@ -165,21 +165,33 @@ module gpu #(
             reg [DATA_MEM_DATA_BITS-1:0] core_lsu_write_data [THREADS_PER_BLOCK-1:0];
             reg [THREADS_PER_BLOCK-1:0] core_lsu_write_ready;
 
-            // Pass through signals between LSUs and data memory controller
+            // LSU <> Coalescer Channels
+            // New per-core signals between coalescer and global controller
+            reg [THREADS_PER_BLOCK-1:0] coalesced_lsu_read_valid;
+            reg [DATA_MEM_ADDR_BITS-1:0] coalesced_lsu_read_address [THREADS_PER_BLOCK-1:0];
+            reg [THREADS_PER_BLOCK-1:0] coalesced_lsu_read_ready;
+            reg [DATA_MEM_DATA_BITS-1:0] coalesced_lsu_read_data [THREADS_PER_BLOCK-1:0];
+
+            reg [THREADS_PER_BLOCK-1:0] coalesced_lsu_write_valid;
+            reg [DATA_MEM_ADDR_BITS-1:0] coalesced_lsu_write_address [THREADS_PER_BLOCK-1:0];
+            reg [DATA_MEM_DATA_BITS-1:0] coalesced_lsu_write_data [THREADS_PER_BLOCK-1:0];
+            reg [THREADS_PER_BLOCK-1:0] coalesced_lsu_write_ready;
+
+            // Pass through signals between coalescer and data memory controller
             genvar j;
             for (j = 0; j < THREADS_PER_BLOCK; j = j + 1) begin
                 localparam lsu_index = i * THREADS_PER_BLOCK + j;
                 always @(posedge clk) begin 
-                    lsu_read_valid[lsu_index] <= core_lsu_read_valid[j];
-                    lsu_read_address[lsu_index] <= core_lsu_read_address[j];
+                    lsu_read_valid[lsu_index]    <= coalesced_lsu_read_valid[j];
+                    lsu_read_address[lsu_index]  <= coalesced_lsu_read_address[j];
 
-                    lsu_write_valid[lsu_index] <= core_lsu_write_valid[j];
-                    lsu_write_address[lsu_index] <= core_lsu_write_address[j];
-                    lsu_write_data[lsu_index] <= core_lsu_write_data[j];
-                    
-                    core_lsu_read_ready[j] <= lsu_read_ready[lsu_index];
-                    core_lsu_read_data[j] <= lsu_read_data[lsu_index];
-                    core_lsu_write_ready[j] <= lsu_write_ready[lsu_index];
+                    lsu_write_valid[lsu_index]   <= coalesced_lsu_write_valid[j];
+                    lsu_write_address[lsu_index] <= coalesced_lsu_write_address[j];
+                    lsu_write_data[lsu_index]    <= coalesced_lsu_write_data[j];
+
+                    coalesced_lsu_read_ready[j]  <= lsu_read_ready[lsu_index];
+                    coalesced_lsu_read_data[j]   <= lsu_read_data[lsu_index];
+                    coalesced_lsu_write_ready[j] <= lsu_write_ready[lsu_index];
                 end
             end
 
@@ -211,6 +223,37 @@ module gpu #(
                 .data_mem_write_address(core_lsu_write_address),
                 .data_mem_write_data(core_lsu_write_data),
                 .data_mem_write_ready(core_lsu_write_ready)
+            );
+
+            coalescer #(
+            .ADDR_BITS(DATA_MEM_ADDR_BITS),
+            .DATA_BITS(DATA_MEM_DATA_BITS),
+            .NUM_THREADS(THREADS_PER_BLOCK)
+            ) core_coalescer (
+            .clk(clk),
+            .reset(core_reset[i]),
+
+            // Upstream: from this core's LSUs
+            .lsu_read_valid(core_lsu_read_valid),
+            .lsu_read_address(core_lsu_read_address),
+            .lsu_read_ready(core_lsu_read_ready),
+            .lsu_read_data(core_lsu_read_data),
+
+            .lsu_write_valid(core_lsu_write_valid),
+            .lsu_write_address(core_lsu_write_address),
+            .lsu_write_data(core_lsu_write_data),
+            .lsu_write_ready(core_lsu_write_ready),
+
+            // Downstream: to the existing global controller fabric
+            .consumer_read_valid(coalesced_lsu_read_valid),
+            .consumer_read_address(coalesced_lsu_read_address),
+            .consumer_read_ready(coalesced_lsu_read_ready),
+            .consumer_read_data(coalesced_lsu_read_data),
+
+            .consumer_write_valid(coalesced_lsu_write_valid),
+            .consumer_write_address(coalesced_lsu_write_address),
+            .consumer_write_data(coalesced_lsu_write_data),
+            .consumer_write_ready(coalesced_lsu_write_ready)
             );
         end
     endgenerate
