@@ -67,27 +67,43 @@ module coalescer #(
   reg [NUM_THREADS-1:0]          found_group_mask;
   reg [ADDR_BITS-1:0]            found_group_address;
 
+  // We also track pending read requests in registers so that we can hold onto them
+  // while we're waiting for the global read to return. 
+  reg [NUM_THREADS-1:0]       pending_read_valid;
+  reg [ADDR_BITS-1:0]         pending_read_address [NUM_THREADS-1:0];
+
+  reg [NUM_THREADS-1:0]       next_group_mask_after_clear;
+  reg                         pending_reads_exist;
+  reg                         pending_reads_remain_after_clear;
+
   reg all_group_released;
 
   integer i;
   integer j;
+  integer k;
 
   always @(*) begin
     found_group         = 0;
     found_leader_idx    = 0;
     found_group_mask    = 0;
     found_group_address = 0;
+    pending_reads_exist = 1'b0;
 
-    // Pick the first pending read request as the leader
-    // Then gather all threads requesting that same address
     for (i = 0; i < NUM_THREADS; i = i + 1) begin
-      if (!found_group && lsu_read_valid[i]) begin
-        found_group         = 1;
+      if (pending_read_valid[i]) begin
+        pending_reads_exist = 1'b1;
+      end
+    end
+
+    for (i = 0; i < NUM_THREADS; i = i + 1) begin
+      if (!found_group && pending_read_valid[i]) begin
+        found_group         = 1'b1;
         found_leader_idx    = i[$clog2(NUM_THREADS)-1:0];
-        found_group_address = lsu_read_address[i];
+        found_group_address = pending_read_address[i];
 
         for (j = 0; j < NUM_THREADS; j = j + 1) begin
-          if (lsu_read_valid[j] && (lsu_read_address[j] == lsu_read_address[i])) begin
+          if (pending_read_valid[j] &&
+              (pending_read_address[j] == pending_read_address[i])) begin
             found_group_mask[j] = 1'b1;
           end
         end
@@ -96,6 +112,8 @@ module coalescer #(
   end
 
   always @(*) begin
+    next_group_mask_after_clear       = pending_read_valid & ~group_mask;
+    pending_reads_remain_after_clear  = |next_group_mask_after_clear;
     all_group_released = 1'b1;
 
     for (i = 0; i < NUM_THREADS; i = i + 1) begin
@@ -159,10 +177,22 @@ module coalescer #(
       group_mask    <= 0;
       group_address <= 0;
       group_data    <= 0;
+      pending_read_valid <= 0;
+
+      for (k = 0; k < NUM_THREADS; k = k + 1) begin
+        pending_read_address[k] <= 0;
+      end
     end else begin
       case (state)
 
-        IDLE: begin
+        IDLE: begin 
+          for (k = 0; k < NUM_THREADS; k = k + 1) begin
+            if (!pending_read_valid[k] && lsu_read_valid[k]) begin
+              pending_read_valid[k]   <= 1'b1;
+              pending_read_address[k] <= lsu_read_address[k];
+            end
+          end
+          
           if (found_group) begin
             leader_idx    <= found_leader_idx;
             group_mask    <= found_group_mask;
@@ -182,11 +212,29 @@ module coalescer #(
         READ_RELAY: begin
           // Hold read_ready/data to the grouped LSUs until all of them
           // drop their valid request lines
+          // if (all_group_released) begin
+          //   group_mask    <= 0;
+          //   group_address <= 0;
+          //   group_data    <= 0;
+          //   state         <= IDLE;
           if (all_group_released) begin
-            group_mask    <= 0;
-            group_address <= 0;
-            group_data    <= 0;
-            state         <= IDLE;
+            for (k = 0; k < NUM_THREADS; k = k + 1) begin
+              if (group_mask[k]) begin
+                pending_read_valid[k] <= 1'b0;
+              end
+            end
+
+            if (pending_reads_remain_after_clear) begin
+              // stay in the coalescer and immediately work on the next address group
+              // selection logic will pick the next leader/group from pending_read_valid
+              state <= IDLE;
+            end else begin
+              state <= IDLE;
+            end
+
+            group_mask    <= '0;
+            group_address <= '0;
+            group_data    <= '0;
           end
         end
 

@@ -59,7 +59,7 @@ async def test_matadd(dut):
         format_cycle(dut, stats.cycles)
         
         await RisingEdge(dut.clk)
-        #cycles += 1
+        #cycles += 1 
 
     data_memory.display(24)
     stats.flush()

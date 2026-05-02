@@ -40,7 +40,7 @@
 export LIBPYTHON_LOC=$(shell cocotb-config --libpython)
 export PYGPI_PYTHON_BIN=$(shell cocotb-config --python-bin)
 
-TESTS = test_matadd test_matmul
+TESTS = test_matadd test_matmul test_manythreadiss
 
 build/gpu_base.v:
 	sv2v -I tinyGPU_base/* -w build/gpu_base.v
@@ -61,8 +61,21 @@ build/gpu_warpinterleaving.v:
 	mv build/temp.v build/gpu_warpinterleaving.v
 
 build/gpu_memcoalesce.v:
-	sv2v -I tinyGPU_memcoalesce/* -w build/gpu_memcoalesce.v
-	sv2v -w build/alu_memcoalesce.v tinyGPU_memcoalesce/alu.sv
+	sv2v -I tinyGPU_memcoalesce \
+		tinyGPU_memcoalesce/gpu.sv \
+		tinyGPU_memcoalesce/controller.sv \
+		tinyGPU_memcoalesce/core.sv \
+		tinyGPU_memcoalesce/coalescer.sv \
+		tinyGPU_memcoalesce/decoder.sv \
+		tinyGPU_memcoalesce/dcr.sv \
+		tinyGPU_memcoalesce/dispatch.sv \
+		tinyGPU_memcoalesce/fetcher.sv \
+		tinyGPU_memcoalesce/lsu.sv \
+		tinyGPU_memcoalesce/pc.sv \
+		tinyGPU_memcoalesce/registers.sv \
+		tinyGPU_memcoalesce/scheduler.sv \
+		-w build/gpu_memcoalesce.v
+	sv2v -I tinyGPU_memcoalesce -w build/alu_memcoalesce.v tinyGPU_memcoalesce/alu.sv
 	echo "" >> build/gpu_memcoalesce.v
 	cat build/alu_memcoalesce.v >> build/gpu_memcoalesce.v
 	echo '`timescale 1ns/1ns' > build/temp.v
