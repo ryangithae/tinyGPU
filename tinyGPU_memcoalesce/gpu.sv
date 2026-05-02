@@ -14,8 +14,8 @@ module gpu #(
     parameter PROGRAM_MEM_ADDR_BITS = 8,     // Number of bits in program memory address (256 rows)
     parameter PROGRAM_MEM_DATA_BITS = 16,    // Number of bits in program memory value (16 bit instruction)
     parameter PROGRAM_MEM_NUM_CHANNELS = 1,  // Number of concurrent channels for sending requests to program memory
-    parameter NUM_CORES = 2,                 // Number of cores to include in this GPU
-    parameter THREADS_PER_BLOCK = 4          // Number of threads to handle per block (determines the compute resources of each core)
+    parameter NUM_CORES = 4,                 // Number of cores to include in this GPU
+    parameter THREADS_PER_BLOCK = 8          // Number of threads to handle per block (determines the compute resources of each core)
 ) (
     input wire clk,
     input wire reset,
@@ -54,7 +54,7 @@ module gpu #(
     reg [7:0] core_block_id [NUM_CORES-1:0];
     reg [$clog2(THREADS_PER_BLOCK):0] core_thread_count [NUM_CORES-1:0];
 
-    // LSU <> Data Memory Controller Channels
+    // LSU <> Coalescer Channels
     localparam NUM_LSUS = NUM_CORES * THREADS_PER_BLOCK;
     reg [NUM_LSUS-1:0] lsu_read_valid;
     reg [DATA_MEM_ADDR_BITS-1:0] lsu_read_address [NUM_LSUS-1:0];
@@ -64,6 +64,17 @@ module gpu #(
     reg [DATA_MEM_ADDR_BITS-1:0] lsu_write_address [NUM_LSUS-1:0];
     reg [DATA_MEM_DATA_BITS-1:0] lsu_write_data [NUM_LSUS-1:0];
     reg [NUM_LSUS-1:0] lsu_write_ready;
+
+    // Coalescer <> Data Memory Controller Channels
+    localparam NUM_COALESCED_GROUPS = NUM_LSUS;
+    reg [NUM_COALESCED_GROUPS-1:0] coalesced_read_valid;
+    reg [DATA_MEM_ADDR_BITS-1:0] coalesced_read_address [NUM_COALESCED_GROUPS-1:0];
+    reg [NUM_COALESCED_GROUPS-1:0] coalesced_read_ready;
+    reg [DATA_MEM_DATA_BITS-1:0] coalesced_read_data [NUM_COALESCED_GROUPS-1:0];
+    reg [NUM_COALESCED_GROUPS-1:0] coalesced_write_valid;
+    reg [DATA_MEM_ADDR_BITS-1:0] coalesced_write_address [NUM_COALESCED_GROUPS-1:0];
+    reg [DATA_MEM_DATA_BITS-1:0] coalesced_write_data [NUM_COALESCED_GROUPS-1:0];
+    reg [NUM_COALESCED_GROUPS-1:0] coalesced_write_ready;
 
     // Fetcher <> Program Memory Controller Channels
     localparam NUM_FETCHERS = NUM_CORES;
@@ -82,24 +93,49 @@ module gpu #(
         .thread_count(thread_count)
     );
 
-    // Data Memory Controller
+    // Memory Coalescing Unit (between LSUs and data memory controller)
+    coalescer #(
+        .ADDR_BITS(DATA_MEM_ADDR_BITS),
+        .DATA_BITS(DATA_MEM_DATA_BITS),
+        .NUM_LSUS(NUM_LSUS)
+    ) coalescer_instance (
+        .lsu_read_valid(lsu_read_valid),
+        .lsu_read_address(lsu_read_address),
+        .lsu_read_ready(lsu_read_ready),
+        .lsu_read_data(lsu_read_data),
+        .lsu_write_valid(lsu_write_valid),
+        .lsu_write_address(lsu_write_address),
+        .lsu_write_data(lsu_write_data),
+        .lsu_write_ready(lsu_write_ready),
+
+        .ctrl_read_valid(coalesced_read_valid),
+        .ctrl_read_address(coalesced_read_address),
+        .ctrl_read_ready(coalesced_read_ready),
+        .ctrl_read_data(coalesced_read_data),
+        .ctrl_write_valid(coalesced_write_valid),
+        .ctrl_write_address(coalesced_write_address),
+        .ctrl_write_data(coalesced_write_data),
+        .ctrl_write_ready(coalesced_write_ready)
+    );
+
+    // Data Memory Controller (now fed by coalesced requests)
     controller #(
         .ADDR_BITS(DATA_MEM_ADDR_BITS),
         .DATA_BITS(DATA_MEM_DATA_BITS),
-        .NUM_CONSUMERS(NUM_LSUS),
+        .NUM_CONSUMERS(NUM_COALESCED_GROUPS),
         .NUM_CHANNELS(DATA_MEM_NUM_CHANNELS)
     ) data_memory_controller (
         .clk(clk),
         .reset(reset),
 
-        .consumer_read_valid(lsu_read_valid),
-        .consumer_read_address(lsu_read_address),
-        .consumer_read_ready(lsu_read_ready),
-        .consumer_read_data(lsu_read_data),
-        .consumer_write_valid(lsu_write_valid),
-        .consumer_write_address(lsu_write_address),
-        .consumer_write_data(lsu_write_data),
-        .consumer_write_ready(lsu_write_ready),
+        .consumer_read_valid(coalesced_read_valid),
+        .consumer_read_address(coalesced_read_address),
+        .consumer_read_ready(coalesced_read_ready),
+        .consumer_read_data(coalesced_read_data),
+        .consumer_write_valid(coalesced_write_valid),
+        .consumer_write_address(coalesced_write_address),
+        .consumer_write_data(coalesced_write_data),
+        .consumer_write_ready(coalesced_write_ready),
 
         .mem_read_valid(data_mem_read_valid),
         .mem_read_address(data_mem_read_address),
