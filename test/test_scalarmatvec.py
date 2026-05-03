@@ -118,7 +118,7 @@ async def test_scalarmatvec(dut):
     for row in matrix:
         data += row  # addr 8-23
 
-    threads = 4
+    threads = 128
 
     await setup(
         dut=dut,

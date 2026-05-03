@@ -75,7 +75,7 @@ async def test_broadcast(dut):
         2, 3, 5, 7,  # 4 shared values at addresses 0-3
     ]
 
-    threads = 8
+    threads = 128
 
     await setup(
         dut=dut,
