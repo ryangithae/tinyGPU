@@ -40,7 +40,7 @@
 export LIBPYTHON_LOC=$(shell cocotb-config --libpython)
 export PYGPI_PYTHON_BIN=$(shell cocotb-config --python-bin)
 
-TESTS = test_matadd test_matmul test_broadcast test_scalarmatvec
+TESTS = test_matadd test_matmul test_broadcast test_scalarmatvec test_polyeval
 
 build/gpu_base.v:
 	sv2v -I tinyGPU_base/* -w build/gpu_base.v

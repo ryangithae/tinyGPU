@@ -15,7 +15,7 @@ module gpu #(
     parameter PROGRAM_MEM_DATA_BITS = 16,    // Number of bits in program memory value (16 bit instruction)
     parameter PROGRAM_MEM_NUM_CHANNELS = 1,  // Number of concurrent channels for sending requests to program memory
     parameter NUM_CORES = 4,                 // Number of cores to include in this GPU
-    parameter THREADS_PER_BLOCK = 8          // Number of threads to handle per block (determines the compute resources of each core)
+    parameter THREADS_PER_BLOCK = 32          // Number of threads to handle per block (determines the compute resources of each core)
 ) (
     input wire clk,
     input wire reset,

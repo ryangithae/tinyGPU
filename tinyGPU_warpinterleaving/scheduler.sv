@@ -58,7 +58,29 @@ module scheduler #(
         end
     end
 
-    // Warp switching: can switch when fetcher is idle and active warp doesn't need it
+    // Round-robin warp selection: find the next warp needing the fetcher
+    reg fetch_warp_found;
+    reg [$clog2(NUM_WARPS)-1:0] next_fetch_warp;
+    reg all_warps_done;
+    integer rr;
+    always @(*) begin
+        fetch_warp_found = 1'b0;
+        next_fetch_warp = active_warp;
+        all_warps_done = 1'b1;
+        for (rr = 0; rr < NUM_WARPS; rr = rr + 1) begin
+            if (warp_state[rr] != DONE)
+                all_warps_done = 1'b0;
+        end
+        for (rr = 1; rr <= NUM_WARPS; rr = rr + 1) begin
+            if (!fetch_warp_found) begin
+                if (warp_state[(active_warp + rr) % NUM_WARPS] == FETCH) begin
+                    fetch_warp_found = 1'b1;
+                    next_fetch_warp = (active_warp + rr) % NUM_WARPS;
+                end
+            end
+        end
+    end
+
     wire can_switch = (fetcher_state == 3'b000) &&
                       (warp_state[active_warp] != FETCH) &&
                       (warp_state[active_warp] != DECODE);
@@ -129,12 +151,11 @@ module scheduler #(
 
             // Active warp switching
             if (do_switch) begin
-                active_warp <= other_warp;
+                active_warp <= next_fetch_warp;
             end
 
             // Block is done when all warps are done
-            done <= (warp_state[0] == DONE) && (warp_state[1] == DONE);
+            done <= all_warps_done;
         end
     end
 endmodule
-

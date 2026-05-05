@@ -22,10 +22,6 @@ async def test_broadcast(dut):
         R6 = R5 * R5  (square the sum)
         addr = 16 + i
         mem[addr] = R6 (store result per thread)
-
-    With 8 threads and 4 threads/block, each LDR has all 4 threads in a block
-    reading the exact same address => perfect coalescing opportunity (4 reads
-    become 1). There are 4 broadcast loads, so 4x coalescing benefit.
     """
 
     program_memory = Memory(dut=dut, addr_bits=8, data_bits=16, channels=1, name="program")
@@ -75,7 +71,7 @@ async def test_broadcast(dut):
         2, 3, 5, 7,  # 4 shared values at addresses 0-3
     ]
 
-    threads = 8
+    threads = 128
 
     await setup(
         dut=dut,

@@ -34,7 +34,7 @@ async def test_matadd(dut):
     ]
 
     # Device Control
-    threads = 8
+    threads = 128
 
     await setup(
         dut=dut,
